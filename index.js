@@ -19,7 +19,6 @@ const BUCKET_NAME = `dump_advance_data_science`;
 // Configure Postgres pool: always pass an object
 let pool;
 if (process.env.INSTANCE_CONNECTION_NAME) {
-    // Running on App Engine or with Cloud SQL Proxy
     pool = new Pool({
         user: process.env.DB_USER,
         password: process.env.DB_PASS,
@@ -28,74 +27,70 @@ if (process.env.INSTANCE_CONNECTION_NAME) {
         // no port: socket only
     });
 } else if (process.env.DATABASE_URL) {
-    // Local with public IP or DATABASE_URL override
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 }
 
 
-// Ensure tables exist on startup
-(async () => {
+async function ensureTables() {
     const client = await pool.connect();
     try {
         await client.query(`
-      CREATE TABLE IF NOT EXISTS companies (
-        id          INTEGER PRIMARY KEY,
-        name        TEXT,
-        stock_price NUMERIC(10,2),
-        high_price  NUMERIC(10,2),
-        low_price   NUMERIC(10,2)
-      )
-    `);
+        CREATE TABLE IF NOT EXISTS companies (
+          id          INTEGER PRIMARY KEY,
+          name        TEXT,
+          stock_price NUMERIC(10,2),
+          high_price  NUMERIC(10,2),
+          low_price   NUMERIC(10,2)
+        );
+      `);
         await client.query(`
-      CREATE TABLE IF NOT EXISTS transactions (
-        id               INTEGER PRIMARY KEY,
-        company_id       INTEGER REFERENCES companies(id),
-        buy_price        NUMERIC(10,2),
-        sell_price       NUMERIC(10,2),
-        transaction_date DATE
-      )
-    `);
+        CREATE TABLE IF NOT EXISTS transactions (
+          id               INTEGER PRIMARY KEY,
+          company_id       INTEGER REFERENCES companies(id),
+          buy_price        NUMERIC(10,2),
+          sell_price       NUMERIC(10,2),
+          transaction_date DATE
+        );
+      `);
         await client.query(`
-      CREATE TABLE IF NOT EXISTS historical_data (
-        id          INTEGER PRIMARY KEY,
-        company_id  INTEGER REFERENCES companies(id),
-        date        DATE,
-        open_price  NUMERIC(10,2),
-        close_price NUMERIC(10,2),
-        volume      BIGINT
-      )
-    `);
-    } catch (err) {
-        console.error('Error creating tables:', err);
+        CREATE TABLE IF NOT EXISTS historical_data (
+          id          INTEGER PRIMARY KEY,
+          company_id  INTEGER REFERENCES companies(id),
+          date        DATE,
+          open_price  NUMERIC(10,2),
+          close_price NUMERIC(10,2),
+          volume      BIGINT
+        );
+      `);
     } finally {
         client.release();
     }
-})();
+}
 
-// Home route - upload form
-app.get('/', (req, res) => res.render('upload'));
 
-// Upload & import handler
-app.post('/upload', async (req, res) => {
+async function uploadHandler(req, res) {
     try {
         const files = req.files || {};
-        ['companies', 'transactions', 'historical'].forEach(key => {
-            if (!files[key]) throw new Error(`${key} CSV missing`);
-        });
+        if (!files.companies || !files.transactions || !files.historical) {
+            throw new Error('Please upload all three CSVs: companies, transactions, historical');
+        }
 
-        // Ensure bucket exists
-        const bucket = storage.bucket(BUCKET_NAME);
-        const [exists] = await bucket.exists();
-        if (!exists) await bucket.create();
 
-        // Upload to GCS
-        await Promise.all(
-            Object.values(files).map(file =>
-                bucket.file(file.name).save(file.data, { resumable: false })
-            )
+        await pool.query(
+            'TRUNCATE companies, transactions, historical_data RESTART IDENTITY CASCADE'
         );
 
-        // Helper to COPY CSV into Postgres
+
+        const bucket = storage.bucket(BUCKET_NAME);
+        const [exists] = await bucket.exists();
+        if (!exists) {
+            await bucket.create();
+        }
+
+        await Promise.all(Object.values(files).map(file =>
+            bucket.file(file.name).save(file.data, { resumable: false })
+        ));
+
         const streamCsv = async (buffer, table, columns) => {
             const client = await pool.connect();
             try {
@@ -113,29 +108,18 @@ app.post('/upload', async (req, res) => {
             }
         };
 
-        // Stream each CSV into its table
-        await streamCsv(files.companies.data, 'companies', [
-            'id', 'name', 'stock_price', 'high_price', 'low_price'
-        ]);
-        await streamCsv(files.transactions.data, 'transactions', [
-            'id', 'company_id', 'buy_price', 'sell_price', 'transaction_date'
-        ]);
-        await streamCsv(files.historical.data, 'historical_data', [
-            'id', 'company_id', 'date', 'open_price', 'close_price', 'volume'
-        ]);
+        await streamCsv(files.companies.data, 'companies', ['id', 'name', 'stock_price', 'high_price', 'low_price']);
+        await streamCsv(files.transactions.data, 'transactions', ['id', 'company_id', 'buy_price', 'sell_price', 'transaction_date']);
+        await streamCsv(files.historical.data, 'historical_data', ['id', 'company_id', 'date', 'open_price', 'close_price', 'volume']);
 
-        res.send('CSV files uploaded to GCS and imported successfully.');
+        res.send('⬆️ CSVs uploaded to GCS and imported into Postgres!');
     } catch (err) {
         console.error('Upload/import error:', err);
         res.status(500).send('Error: ' + err.message);
     }
-});
+}
 
-// Search route - form
-app.get('/search', (req, res) => res.render('search', { results: [] }));
-
-// Search handler
-app.post('/search', async (req, res) => {
+async function searchHandler(req, res) {
     const q = req.body.query;
     try {
         const { rows } = await pool.query(
@@ -147,8 +131,22 @@ app.post('/search', async (req, res) => {
         console.error('Search error:', err);
         res.status(500).send(err.message);
     }
-});
+}
 
-// Start
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server on port ${PORT}`));
+
+async function main() {
+    await ensureTables();
+
+    app.get('/', (req, res) => res.render('upload'));
+    app.post('/upload', uploadHandler);
+    app.get('/search', (req, res) => res.render('search', { results: [] }));
+    app.post('/search', searchHandler);
+
+    const PORT = process.env.PORT || 8080;
+    app.listen(PORT, () => console.log(`Server on port ${PORT}`));
+}
+
+main().catch(err => {
+    console.error('Fatal startup error:', err);
+    process.exit(1);
+});
