@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Search Companies</title>
+</head>
+
+<body>
+    <h1>Search Companies</h1>
+    <form action="/search" method="post">
+        <input type="text" name="query" placeholder="Company name" required>
+        <button type="submit">Search</button>
+    </form>
+    <% if (results && results.length) { %>
+        <h2>Results:</h2>
+        <table border="1">
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Price</th>
+                <th>High</th>
+                <th>Low</th>
+            </tr>
+            <% results.forEach(r=> { %>
+                <tr>
+                    <td>
+                        <%= r.id %>
+                    </td>
+                    <td>
+                        <%= r.name %>
+                    </td>
+                    <td>
+                        <%= r.stock_price %>
+                    </td>
+                    <td>
+                        <%= r.high_price %>
+                    </td>
+                    <td>
+                        <%= r.low_price %>
+                    </td>
+                </tr>
+                <% }) %>
+        </table>
+        <% } %>
+            <hr>
+            <a href="/">Back to Upload</a>
+</body>
+
+</html>

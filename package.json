@@ -1,0 +1,24 @@
+{
+  "name": "gcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/storage": "^7.16.0",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "express-fileupload": "^1.5.1",
+    "googleapis": "^148.0.0",
+    "mysql2": "^3.14.1",
+    "pg": "^8.15.6",
+    "pg-copy-streams": "^6.0.6"
+  }
+}
