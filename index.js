@@ -18,19 +18,19 @@ const BUCKET_NAME = `dump_advance_data_science`;
 
 // Configure Postgres pool: always pass an object
 let pool;
-if (process.env.INSTANCE_CONNECTION_NAME) {
-    // Running on App Engine or with Cloud SQL Proxy
-    pool = new Pool({
-        user: process.env.DB_USER,
-        password: process.env.DB_PASS,
-        database: process.env.DB_NAME,
-        host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
-        // no port: socket only
-    });
-} else (process.env.DATABASE_URL) {
-    // Local with public IP or DATABASE_URL override
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
-}
+// if (process.env.INSTANCE_CONNECTION_NAME) {
+//     // Running on App Engine or with Cloud SQL Proxy
+//     pool = new Pool({
+//         user: process.env.DB_USER,
+//         password: process.env.DB_PASS,
+//         database: process.env.DB_NAME,
+//         host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
+//         // no port: socket only
+//     });
+// } else if (process.env.DATABASE_URL) {
+//     // Local with public IP or DATABASE_URL override
+pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// }
 
 
 // Ensure tables exist on startup
