@@ -7,7 +7,6 @@ env_variables:
   DB_USER: "postgres"
   DB_PASS: "trio@123"
   DB_NAME: "stock_data"
-  DATABASE_URL: "postgres://${DB_USER}:${DB_PASS}@34.107.58.71:5432/${DB_NAME}"
   # GCS bucket (must already exist or replace with your bucket)
   GCS_BUCKET: "dump_advance_data_science"
 
