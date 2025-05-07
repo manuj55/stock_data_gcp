@@ -4,47 +4,264 @@
 <head>
     <meta charset="UTF-8">
     <title>Search Companies</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 10px;
+            background-color: #333;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #fff;
+            margin-bottom: 20px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #333;
+            color: #fff;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .nested-table th,
+        .nested-table td {
+            border: 1px solid #bbb;
+            padding: 8px;
+        }
+
+        .actions-form {
+            display: inline;
+        }
+    </style>
 </head>
 
 <body>
     <h1>Search Companies</h1>
     <form action="/search" method="post">
-        <input type="text" name="query" placeholder="Company name" required>
+        <input type="text" name="query" placeholder="Company name" required value="<%= lastQuery %>">
         <button type="submit">Search</button>
     </form>
-    <% if (results && results.length) { %>
-        <h2>Results:</h2>
-        <table border="1">
-            <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Price</th>
-                <th>High</th>
-                <th>Low</th>
-            </tr>
-            <% results.forEach(r=> { %>
-                <tr>
-                    <td>
-                        <%= r.id %>
-                    </td>
-                    <td>
-                        <%= r.name %>
-                    </td>
-                    <td>
-                        <%= r.stock_price %>
-                    </td>
-                    <td>
-                        <%= r.high_price %>
-                    </td>
-                    <td>
-                        <%= r.low_price %>
-                    </td>
-                </tr>
-                <% }) %>
-        </table>
+
+    <% if (typeof elapsedSearch !=='undefined' ) { %>
+        <p>Search took <%= elapsedSearch %> ms.</p>
         <% } %>
-            <hr>
-            <a href="/">Back to Upload</a>
+            <% if (typeof elapsedDelete !=='undefined' ) { %>
+                <p>Delete took <%= elapsedDelete %> ms.</p>
+                <% } %>
+                    <% if (typeof elapsedUpdate !=='undefined' ) { %>
+                        <p>Update took <%= elapsedUpdate %> ms.</p>
+                        <% } %>
+
+                            <% if (results.length) { %>
+                                <h2>Results:</h2>
+                                <table>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Price</th>
+                                        <th>Sector</th>
+                                        <th>Country</th>
+                                        <th>Founded</th>
+                                        <th>Shares Out.</th>
+                                        <th>Market Cap</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                    <% results.forEach(r=> { %>
+                                        <tr>
+                                            <td>
+                                                <%= r.id %>
+                                            </td>
+                                            <td>
+                                                <%= r.company_name %>
+                                            </td>
+                                            <td>
+                                                <%= r.current_price %>
+                                            </td>
+                                            <td>
+                                                <%= r.sector %>
+                                            </td>
+                                            <td>
+                                                <%= r.country %>
+                                            </td>
+                                            <td>
+                                                <%= r.founding_year %>
+                                            </td>
+                                            <td>
+                                                <%= r.shares_outstanding %>
+                                            </td>
+                                            <td>
+                                                <%= r.market_cap %>
+                                            </td>
+                                            <td>
+                                                <form action="/company/delete" method="post"
+                                                    onsubmit="return confirm('Delete this company and all related data?');">
+                                                    <input type="hidden" name="id" value="<%= r.id %>">
+                                                    <button type="submit">Delete</button>
+                                                </form>
+                                                <form action="/company/update" method="post" style="margin-top:8px;">
+                                                    <input type="hidden" name="id" value="<%= r.id %>">
+                                                    <button type="button"
+                                                        onclick="document.getElementById('update-<%= r.id %>').style.display='table-row';">Edit</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <tr id="update-<%= r.id %>" style="display:none; background:#f9f9f9;">
+                                            <td colspan="9">
+                                                <h3>Update Company</h3>
+                                                <form action="/company/update" method="post">
+                                                    <input type="hidden" name="id" value="<%= r.id %>">
+                                                    <label>Name: <input name="company_name"
+                                                            value="<%= r.company_name %>" required></label>
+                                                    <label>Price: <input name="current_price" type="number" step="0.01"
+                                                            value="<%= r.current_price %>" required></label>
+                                                    <label>Sector: <input name="sector" value="<%= r.sector %>"></label>
+                                                    <label>Country: <input name="country"
+                                                            value="<%= r.country %>"></label>
+                                                    <label>Founded: <input name="founding_year" type="number"
+                                                            value="<%= r.founding_year %>"></label>
+                                                    <label>Shares Out.: <input name="shares_outstanding" type="number"
+                                                            value="<%= r.shares_outstanding %>"></label>
+                                                    <label>Market Cap: <input name="market_cap" type="number"
+                                                            step="0.01" value="<%= r.market_cap %>"></label>
+                                                    <button type="submit">Save</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="9">
+                                                <h3>Transactions</h3>
+                                                <table class="nested-table">
+                                                    <tr>
+                                                        <th>Date</th>
+                                                        <th>Type</th>
+                                                        <th>Quantity</th>
+                                                        <th>Buy Price</th>
+                                                        <th>Sell Price</th>
+                                                        <th>Commission</th>
+                                                        <th>Currency</th>
+                                                    </tr>
+                                                    <% if (r.transactions.length) { %>
+                                                        <% r.transactions.forEach(tx=> { %>
+                                                            <tr>
+                                                                <td>
+                                                                    <%= tx.transaction_date %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= tx.transaction_type %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= tx.quantity %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= tx.buy_price %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= tx.sell_price %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= tx.commission_fee %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= tx.currency %>
+                                                                </td>
+                                                            </tr>
+                                                            <% }); %>
+                                                                <% } else { %>
+                                                                    <tr>
+                                                                        <td colspan="7">No transactions found.</td>
+                                                                    </tr>
+                                                                    <% } %>
+                                                </table>
+                                                <h3>Historical Data</h3>
+                                                <table class="nested-table">
+                                                    <tr>
+                                                        <th>Date</th>
+                                                        <th>Open</th>
+                                                        <th>Close</th>
+                                                        <th>High</th>
+                                                        <th>Low</th>
+                                                        <th>Volume</th>
+                                                    </tr>
+                                                    <% if (r.historical.length) { %>
+                                                        <% r.historical.forEach(h=> { %>
+                                                            <tr>
+                                                                <td>
+                                                                    <%= h.date %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= h.open_price %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= h.close_price %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= h.high_price %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= h.low_price %>
+                                                                </td>
+                                                                <td>
+                                                                    <%= h.volume %>
+                                                                </td>
+                                                            </tr>
+                                                            <% }); %>
+                                                                <% } else { %>
+                                                                    <tr>
+                                                                        <td colspan="6">No historical data found.</td>
+                                                                    </tr>
+                                                                    <% } %>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        <% }); %>
+                                </table>
+                                <a href="/">Back to Upload</a>
+                                <% } else { %>
+                                    <p>No data found.</p>
+                                    <a href="/">Back to Upload</a>
+                                    <% } %>
 </body>
 
 </html>
