@@ -14,14 +14,23 @@
 
         h1 {
             color: #333;
+            text-align: center;
+        }
+
+        h2,
+        h3 {
+            color: #333;
         }
 
         form {
             background-color: #fff;
-            padding: 20px;
             border-radius: 4px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+        }
+
+        div {
+            padding: 20px;
         }
 
         label {
@@ -34,17 +43,23 @@
             margin-bottom: 10px;
         }
 
-        button {
+
+        .delete-button {
+            background: none;
+            color: inherit;
+            border: none;
+            padding: 10px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .update-button {
             padding: 10px 20px;
             background-color: #333;
             color: #fff;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #555;
         }
 
         a {
@@ -56,15 +71,19 @@
 </head>
 
 <body>
-    <h1>Upload CSV Files</h1>
+    <h1>Trade Lens</h1>
+    <h2>Upload CSV Files</h2>
     <form action="/upload" method="post" enctype="multipart/form-data">
-        <label>Companies CSV:</label>
-        <input type="file" name="companies" accept=".csv" required><br>
-        <label>Transactions CSV:</label>
-        <input type="file" name="transactions" accept=".csv" required><br>
-        <label>Historical CSV:</label>
-        <input type="file" name="historical" accept=".csv" required><br>
-        <button type="submit">Upload & Import</button>
+        <div>
+            <label>Companies CSV:</label>
+            <input type="file" name="companies" accept=".csv" required><br>
+            <label>Transactions CSV:</label>
+            <input type="file" name="transactions" accept=".csv" required><br>
+            <label>Historical CSV:</label>
+            <input type="file" name="historical" accept=".csv" required><br>
+            <button type="submit" class="update-button">Upload & Import</button>
+        </div>
+
     </form>
 
     <p>Upload Duration: <%= uploadDuration %> ms</p>
@@ -77,8 +96,10 @@
                 <li>
                     <%= name %>
                         <form action="/delete" method="post" style="display:inline">
-                            <input type="hidden" name="filename" value="<%= name %>">
-                            <button type="submit">Delete</button>
+                            <div style="display:inline">
+                                <input type="hidden" name="filename" value="<%= name %>">
+                                <button type="submit" class="delete-button">Delete</button>
+                            </div>
                         </form>
                 </li>
                 <% }) %>
