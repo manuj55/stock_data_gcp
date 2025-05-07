@@ -13,18 +13,18 @@ app.use(express.static('public'));
 
 const BUCKET_NAME = 'dump_advance_data_science';
 const storage = new Storage({ projectId: process.env.GOOGLE_CLOUD_PROJECT });
+
 let pool;
 if (process.env.INSTANCE_CONNECTION_NAME) {
     pool = new Pool({
         user: process.env.DB_USER,
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
-        host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`
+        host: `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`,
     });
 } else if (process.env.DATABASE_URL) {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 }
-
 
 async function ensureTables() {
     const client = await pool.connect();
@@ -81,14 +81,20 @@ async function uploadHandler(req, res) {
         if (!files.companies || !files.transactions || !files.historical) {
             throw new Error('Please upload all three CSVs.');
         }
+
         await pool.query('TRUNCATE companies, transactions, historical_data RESTART IDENTITY CASCADE');
         const bucket = storage.bucket(BUCKET_NAME);
         const [exists] = await bucket.exists();
         if (!exists) await bucket.create();
         const uploadStart = Date.now();
-        await Promise.all(Object.values(files).map(f => bucket.file(f.name).save(f.data, { resumable: false })));
+        await Promise.all(
+            Object.values(files).map(f =>
+                bucket.file(f.name).save(f.data, { resumable: false })
+            )
+        );
         const uploadDuration = Date.now() - uploadStart;
-        console.log(`File upload to GCS bucket took: ${uploadDuration}ms`);
+        console.log(`GCS upload took ${uploadDuration}ms`);
+
         const streamCsv = async (buffer, table, cols) => {
             const client = await pool.connect();
             try {
@@ -96,24 +102,38 @@ async function uploadHandler(req, res) {
                 const pgStream = client.query(copyFrom(sql));
                 const pass = new PassThrough();
                 pass.end(buffer);
-                await new Promise((ok, ko) => pass.pipe(pgStream).on('finish', ok).on('error', ko));
+                await new Promise((ok, ko) =>
+                    pass.pipe(pgStream).on('finish', ok).on('error', ko)
+                );
             } finally {
                 client.release();
             }
         };
-        const exportStartSQL = Date.now();
-        await streamCsv(files.companies.data, 'companies', ['id', 'company_name', 'current_price', 'sector', 'country', 'founding_year', 'shares_outstanding', 'market_cap']);
-        await streamCsv(files.transactions.data, 'transactions', ['id', 'company_id', 'transaction_date', 'buy_price', 'sell_price', 'quantity', 'transaction_type', 'trader_id', 'commission_fee', 'currency']);
-        await streamCsv(files.historical.data, 'historical_data', ['company_id', 'date', 'open_price', 'close_price', 'high_price', 'low_price', 'volume']);
-        const exportDurationSQL = Date.now() - exportStartSQL;
-        console.log(`File export to  sql took: ${exportDurationSQL}ms`);
-        res.redirect(`/?uploadDuration=${uploadDuration}&elapsedUpload=${exportDurationSQL}`);
+
+        const sqlStart = Date.now();
+        await streamCsv(files.companies.data, 'companies', [
+            'id', 'company_name', 'current_price', 'sector', 'country',
+            'founding_year', 'shares_outstanding', 'market_cap'
+        ]);
+        await streamCsv(files.transactions.data, 'transactions', [
+            'id', 'company_id', 'transaction_date', 'buy_price', 'sell_price',
+            'quantity', 'transaction_type', 'trader_id', 'commission_fee', 'currency'
+        ]);
+        await streamCsv(files.historical.data, 'historical_data', [
+            'company_id', 'date', 'open_price', 'close_price', 'high_price', 'low_price', 'volume'
+        ]);
+        const sqlDuration = Date.now() - sqlStart;
+        console.log(`CSV → SQL took ${sqlDuration}ms`);
+
+        // Redirect back to “/” with timings
+        res.redirect(`/?uploadDuration=${uploadDuration}&sqlDuration=${sqlDuration}`);
     } catch (err) {
         console.error('Upload/import error:', err);
         res.status(500).send('Error: ' + err.message);
     }
 }
 
+// --- DELETE A GCS FILE (original feature) ---
 async function deleteHandler(req, res) {
     try {
         const { filename } = req.body;
@@ -121,7 +141,7 @@ async function deleteHandler(req, res) {
         await storage.bucket(BUCKET_NAME).file(filename).delete();
         res.redirect('/');
     } catch (err) {
-        console.error('Delete error:', err);
+        console.error('Delete file error:', err);
         res.status(500).send('Error deleting file: ' + err.message);
     }
 }
@@ -145,13 +165,27 @@ async function deleteCompanyHandler(req, res) {
 async function updateCompanyHandler(req, res) {
     const start = Date.now();
     try {
-        const { id, company_name, current_price, sector, country, founding_year, shares_outstanding, market_cap } = req.body;
+        const {
+            id, company_name, current_price,
+            sector, country, founding_year,
+            shares_outstanding, market_cap
+        } = req.body;
+
         await pool.query('BEGIN');
         await pool.query(
-            `UPDATE companies SET company_name=$1, current_price=$2, sector=$3, country=$4, founding_year=$5, shares_outstanding=$6, market_cap=$7 WHERE id=$8`,
+            `UPDATE companies
+         SET company_name=$1,
+             current_price=$2,
+             sector=$3,
+             country=$4,
+             founding_year=$5,
+             shares_outstanding=$6,
+             market_cap=$7
+       WHERE id=$8`,
             [company_name, current_price, sector, country, founding_year, shares_outstanding, market_cap, id]
         );
         await pool.query('COMMIT');
+
         const duration = Date.now() - start;
         res.redirect(`/search?elapsedUpdate=${duration}`);
     } catch (err) {
@@ -165,15 +199,31 @@ async function searchHandler(req, res) {
     const start = Date.now();
     const q = req.body.query || '';
     try {
-        const { rows: companies } = await pool.query('SELECT * FROM companies WHERE company_name ILIKE $1', [`%${q}%`]);
+        const { rows: companies } = await pool.query(
+            'SELECT * FROM companies WHERE company_name ILIKE $1',
+            [`%${q}%`]
+        );
         for (let c of companies) {
-            const txRes = await pool.query('SELECT * FROM transactions WHERE company_id = $1 ORDER BY transaction_date', [c.id]);
-            const histRes = await pool.query('SELECT * FROM historical_data WHERE company_id = $1 ORDER BY date', [c.id]);
-            c.transactions = txRes.rows;
-            c.historical = histRes.rows;
+            const tx = await pool.query(
+                'SELECT * FROM transactions WHERE company_id=$1 ORDER BY transaction_date',
+                [c.id]
+            );
+            const hist = await pool.query(
+                'SELECT * FROM historical_data WHERE company_id=$1 ORDER BY date',
+                [c.id]
+            );
+            c.transactions = tx.rows;
+            c.historical = hist.rows;
         }
-        const duration = req.query.duration ? parseInt(req.query.duration) : (Date.now() - start);
-        res.render('search', { results: companies, elapsedSearch: duration, elapsedDelete: undefined, elapsedUpdate: undefined, lastQuery: q });
+        const elapsedSearch = Date.now() - start;
+        console.log(`companies: ${JSON.stringify(companies)}`);
+        res.render('search', {
+            results: companies,
+            elapsedSearch,
+            elapsedDelete: undefined,
+            elapsedUpdate: undefined,
+            lastQuery: q
+        });
     } catch (err) {
         console.error('Search error:', err);
         res.status(500).send(err.message);
@@ -183,27 +233,45 @@ async function searchHandler(req, res) {
 async function main() {
     await ensureTables();
     app.get('/', async (req, res) => {
-        const { uploadDuration, exportDurationSQL } = req.query;
-        console.log('Upload duration:', uploadDuration, 'Export duration SQL:', exportDurationSQL);
+        const { uploadDuration, sqlDuration } = req.query;
         const bucket = storage.bucket(BUCKET_NAME);
         const [exists] = await bucket.exists();
         let files = [];
         if (exists) {
-            const [filesList] = await bucket.getFiles();
-            files = filesList.map(f => f.name);
+            const [fileList] = await bucket.getFiles();
+            files = fileList.map(f => f.name);
         }
-        res.render('upload', { files, uploadDuration: uploadDuration, exportDurationSQL: exportDurationSQL });
+        res.render('upload', {
+            files,
+            uploadDuration,
+            sqlDuration
+        });
     });
+
     app.post('/upload', uploadHandler);
     app.post('/delete', deleteHandler);
-    app.post('/company/delete', deleteCompanyHandler);
-    app.post('/company/update', updateCompanyHandler);
+
     app.get('/search', (req, res) => {
         const { elapsedDelete, elapsedUpdate } = req.query;
-        res.render('search', { results: [], elapsedSearch: undefined, elapsedDelete, elapsedUpdate, lastQuery: '' });
+        res.render('search', {
+            results: [],
+            elapsedSearch: undefined,
+            elapsedDelete,
+            elapsedUpdate,
+            lastQuery: ''
+        });
     });
     app.post('/search', searchHandler);
+
+    // Company‐level actions
+    app.post('/company/delete', deleteCompanyHandler);
+    app.post('/company/update', updateCompanyHandler);
+
     const PORT = process.env.PORT || 8080;
     app.listen(PORT, () => console.log(`Server on port ${PORT}`));
 }
-main().catch(err => { console.error('Startup error:', err); process.exit(1); });
+
+main().catch(err => {
+    console.error('Startup error:', err);
+    process.exit(1);
+});

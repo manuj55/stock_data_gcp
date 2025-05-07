@@ -12,7 +12,11 @@
             padding: 20px;
         }
 
-        h1,
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
         h2,
         h3 {
             color: #333;
@@ -65,20 +69,69 @@
             background-color: #f2f2f2;
         }
 
-        .nested-table th,
-        .nested-table td {
-            border: 1px solid #bbb;
-            padding: 8px;
-        }
-
         .actions-form {
             display: inline;
         }
     </style>
+
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script>
+        google.charts.load('current', { packages: ['corechart'] });
+        google.charts.setOnLoadCallback(drawAllCharts);
+
+        function drawAllCharts() {
+    <% results.forEach(function (r) { %>
+      <% if (r.transactions.length) { %>
+        var txData = google.visualization.arrayToDataTable([
+            ['Date', 'Quantity'],
+          <% r.transactions.forEach(function (tx) { %>
+                [new Date('<%= tx.transaction_date %>'), <%= tx.quantity %> ],
+          <% }); %>
+        ]);
+            var txChart = new google.visualization.ColumnChart(
+                document.getElementById('tx-chart-<%= r.id %>')
+            );
+            txChart.draw(txData, {
+                title: 'Transactions Quantity over Time',
+                legend: { position: 'none' },
+                hAxis: { title: 'Date' },
+                vAxis: { title: 'Quantity' },
+                chartArea: { width: '80%', height: '70%' }
+            });
+      <% } %>
+
+
+      <% if (r.historical.length) { %>
+        var histData = new google.visualization.DataTable();
+            histData.addColumn('date', 'Date');
+            histData.addColumn('number', 'Close Price');
+        <% r.historical.forEach(function (h) { %>
+                histData.addRow([
+                    new Date('<%= h.date %>'),
+                    Number(<%= h.close_price %>)
+                ]);
+        <% }); %>
+
+        var histChart = new google.visualization.LineChart(
+                    document.getElementById('hist-chart-<%= r.id %>')
+                );
+            histChart.draw(histData, {
+                title: 'Close Price History',
+                legend: { position: 'none' },
+                hAxis: { title: 'Date' },
+                vAxis: { title: 'Price' },
+                chartArea: { width: '80%', height: '70%' }
+            });
+      <% } %>
+
+    <% }); %>
+  }
+    </script>
 </head>
 
 <body>
-    <h1>Search Companies</h1>
+    <h1>Trade Lens</h1>
+    <h2>Search Companies</h2>
     <form action="/search" method="post">
         <input type="text" name="query" placeholder="Company name" required value="<%= lastQuery %>">
         <button type="submit">Search</button>
@@ -108,7 +161,7 @@
                                         <th>Market Cap</th>
                                         <th>Actions</th>
                                     </tr>
-                                    <% results.forEach(r=> { %>
+                                    <% results.forEach(function(r) { %>
                                         <tr>
                                             <td>
                                                 <%= r.id %>
@@ -136,15 +189,16 @@
                                             </td>
                                             <td>
                                                 <form action="/company/delete" method="post"
-                                                    onsubmit="return confirm('Delete this company and all related data?');">
+                                                    onsubmit="return confirm('Delete this company and all related data?');"
+                                                    class="actions-form">
                                                     <input type="hidden" name="id" value="<%= r.id %>">
                                                     <button type="submit">Delete</button>
                                                 </form>
-                                                <form action="/company/update" method="post" style="margin-top:8px;">
-                                                    <input type="hidden" name="id" value="<%= r.id %>">
-                                                    <button type="button"
-                                                        onclick="document.getElementById('update-<%= r.id %>').style.display='table-row';">Edit</button>
-                                                </form>
+                                                <button type="button"
+                                                    onclick="document.getElementById('update-<%= r.id %>').style.display='table-row';"
+                                                    style="margin-top:8px;">
+                                                    Edit
+                                                </button>
                                             </td>
                                         </tr>
                                         <tr id="update-<%= r.id %>" style="display:none; background:#f9f9f9;">
@@ -172,96 +226,30 @@
                                         <tr>
                                             <td colspan="9">
                                                 <h3>Transactions</h3>
-                                                <table class="nested-table">
-                                                    <tr>
-                                                        <th>Date</th>
-                                                        <th>Type</th>
-                                                        <th>Quantity</th>
-                                                        <th>Buy Price</th>
-                                                        <th>Sell Price</th>
-                                                        <th>Commission</th>
-                                                        <th>Currency</th>
-                                                    </tr>
-                                                    <% if (r.transactions.length) { %>
-                                                        <% r.transactions.forEach(tx=> { %>
-                                                            <tr>
-                                                                <td>
-                                                                    <%= tx.transaction_date %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= tx.transaction_type %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= tx.quantity %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= tx.buy_price %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= tx.sell_price %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= tx.commission_fee %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= tx.currency %>
-                                                                </td>
-                                                            </tr>
-                                                            <% }); %>
+                                                <% if (r.transactions.length) { %>
+                                                    <div id="tx-chart-<%= r.id %>" style="width:100%; height:300px;">
+                                                    </div>
+                                                    <% } else { %>
+                                                        <p><em>No transactions to plot.</em></p>
+                                                        <% } %>
+
+                                                            <h3>Historical Data</h3>
+                                                            <% if (r.historical.length) { %>
+                                                                <div id="hist-chart-<%= r.id %>"
+                                                                    style="width:100%; height:300px;"></div>
                                                                 <% } else { %>
-                                                                    <tr>
-                                                                        <td colspan="7">No transactions found.</td>
-                                                                    </tr>
+                                                                    <p><em>No historical data to plot.</em></p>
                                                                     <% } %>
-                                                </table>
-                                                <h3>Historical Data</h3>
-                                                <table class="nested-table">
-                                                    <tr>
-                                                        <th>Date</th>
-                                                        <th>Open</th>
-                                                        <th>Close</th>
-                                                        <th>High</th>
-                                                        <th>Low</th>
-                                                        <th>Volume</th>
-                                                    </tr>
-                                                    <% if (r.historical.length) { %>
-                                                        <% r.historical.forEach(h=> { %>
-                                                            <tr>
-                                                                <td>
-                                                                    <%= h.date %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= h.open_price %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= h.close_price %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= h.high_price %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= h.low_price %>
-                                                                </td>
-                                                                <td>
-                                                                    <%= h.volume %>
-                                                                </td>
-                                                            </tr>
-                                                            <% }); %>
-                                                                <% } else { %>
-                                                                    <tr>
-                                                                        <td colspan="6">No historical data found.</td>
-                                                                    </tr>
-                                                                    <% } %>
-                                                </table>
+
                                             </td>
                                         </tr>
                                         <% }); %>
                                 </table>
-                                <a href="/">Back to Upload</a>
                                 <% } else { %>
                                     <p>No data found.</p>
-                                    <a href="/">Back to Upload</a>
                                     <% } %>
+
+                                        <a href="/">Back to Upload</a>
 </body>
 
 </html>

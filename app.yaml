@@ -1,4 +1,4 @@
-runtime: nodejs18
+runtime: nodejs20
 env: standard
 
 env_variables:
@@ -7,7 +7,6 @@ env_variables:
   DB_USER: "postgres"
   DB_PASS: "trio@123"
   DB_NAME: "stock_data"
-  # GCS bucket (must already exist or replace with your bucket)
   GCS_BUCKET: "dump_advance_data_science"
 
 # Optionally set instance class, scaling, etc.
